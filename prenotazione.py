@@ -35,6 +35,16 @@ def prenota(orario):
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        chrome_options.add_argument("--disable-mobile-emulation")
+        chrome_options.add_argument("--window-size=1920,1080")
+
+        # Disabilita User-Agent Client Hints che potrebbero forzare mobile
+        prefs = {"profile.managed_default_content_settings.images": 1}
+        chrome_options.add_experimental_option("prefs", prefs)
+        chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+
         # Su Raspberry Pi, usa Chromium
         if "arm" in platform.machine() or "aarch64" in platform.machine():
             print("?? Rilevato Raspberry Pi - Usando Chromium")
@@ -42,7 +52,30 @@ def prenota(orario):
             # Opzioni aggiuntive per RPi
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument("--disable-extensions")
-            driver = webdriver.Chrome(options=chrome_options)
+            chrome_options.add_argument("--disable-mobile-emulation")
+            
+            # Cerca il chromedriver di chromium
+            chromedriver_paths = [
+                "/usr/bin/chromedriver",
+                "/usr/lib/chromium-browser/chromedriver",
+                "/snap/bin/chromium"
+            ]
+            
+            chromedriver_path = None
+            for path in chromedriver_paths:
+                if os.path.exists(path):
+                    chromedriver_path = path
+                    print(f"  ? Trovato chromedriver: {path}")
+                    break
+            
+            if not chromedriver_path:
+                print("  ? Chromedriver non trovato!")
+                print("  Installa con: sudo apt-get install chromium-chromedriver")
+                raise Exception("Chromedriver non trovato su Raspberry Pi")
+            
+            service = Service(chromedriver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+
         else:
             print("?? Ricerca e download chromedriver...")
             from webdriver_manager.chrome import ChromeDriverManager
