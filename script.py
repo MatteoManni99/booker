@@ -8,6 +8,7 @@ from datetime import datetime
 from config import ANACLETO_KEY, MY_TELEGRAM_ID, USERNAME, PASSWORD
 from telegram import Bot
 import asyncio
+from datetime import datetime, timedelta
 
 # Usa il token che ti ha dato BotFather
 token = ANACLETO_KEY
@@ -196,10 +197,21 @@ def prenota():
             return success_flag
 
 async def invia_messaggio(success_flag = False):
+    data_futura = datetime.now() + timedelta(days=7)
+    giorno = str(data_futura.day)
+    giorni_settimana = ['lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato', 'domenica']
+    giorno_settimana = giorni_settimana[data_futura.weekday()]
+
     if success_flag:
-        await bot.send_message(chat_id=chat_id, text="✅ Prenotazione completata con successo!")
+        await bot.send_message(
+            chat_id=chat_id, 
+            text=f"✅ Prenotazione completata per {giorno_settimana} {giorno} alle 18:15 con successo!"
+        )
     else:
-        await bot.send_message(chat_id=chat_id, text="❌ Prenotazione fallita. Controlla i log per dettagli.")
+        await bot.send_message(
+            chat_id=chat_id, 
+            text=f"❌ Prenotazione per {giorno_settimana} {giorno} alle 18:15 fallita. Controlla i log per dettagli."
+        )
 
 if __name__ == "__main__":
     success_flag = prenota()
