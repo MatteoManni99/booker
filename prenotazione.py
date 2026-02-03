@@ -1,6 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import NoSuchElementException
 import time
@@ -10,6 +11,7 @@ from config import ANACLETO_KEY, MY_TELEGRAM_ID, USERNAME, PASSWORD
 from telegram import Bot
 import asyncio
 from datetime import datetime, timedelta
+import platform
 
 # Usa il token che ti ha dato BotFather
 token = ANACLETO_KEY
@@ -26,11 +28,28 @@ def prenota(orario):
     success_flag = False
     tipo_conferma = "ok"
     try:
-        # webdriver_manager scarica automaticamente il driver corretto
-        print("🔍 Ricerca e download chromedriver...")
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service)
-        print("✓ Chromedriver pronto")
+        print("?? Configurazione browser...")
+        
+        # Opzioni Chrome/Chromium
+        chrome_options = Options()
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        
+        # Su Raspberry Pi, usa Chromium
+        if "arm" in platform.machine() or "aarch64" in platform.machine():
+            print("?? Rilevato Raspberry Pi - Usando Chromium")
+            chrome_options.binary_location = "/usr/bin/chromium-browser"
+            # Opzioni aggiuntive per RPi
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--disable-extensions")
+            driver = webdriver.Chrome(options=chrome_options)
+        else:
+            print("?? Ricerca e download chromedriver...")
+            from webdriver_manager.chrome import ChromeDriverManager
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        print("✓ Broewser pronto")
         
         print("1. Apertura sito...")
         driver.get("https://ecomm.sportrick.com/REPLYwellnessTO")
