@@ -171,14 +171,14 @@ def prenota(orario):
             time.sleep(0.1)
             print(f"  ✓ Click {i+1}/5 su '>'")
         print("✓ Completati i 5 click su '>'")
-        time.sleep(5)  # Attendi il caricamento degli orari disponibili
+        time.sleep(7)  # Attendi il caricamento degli orari disponibili
         
         print(f"12. Click su '{orario} - 60 min SALA ATTREZZI'...")
         # Cerchiamo tutti gli slot disponibili
         slots = driver.find_elements(By.XPATH, "//div[@class='event-slot slot-available']")
         print(f"  ℹ Trovati {len(slots)} slot disponibili")
         # Proviamo a trovare lo slot con l'orario specifico
-        for slot in slots:
+        for slot in reversed(slots):
             try:
                 time_start = slot.find_element(By.XPATH, ".//span[@class='time-start']").text
                 
@@ -276,12 +276,14 @@ async def invia_messaggio(orario, success_flag = False, tipo_conferma = "ok"):
             )
         
 
-if __name__ == "__main__":
+async def main():
     success_flag, tipo_conferma = prenota("18:15")
-    asyncio.run(invia_messaggio("18:15", success_flag, tipo_conferma))
-
+    await invia_messaggio("18:15", success_flag, tipo_conferma)
     if tipo_conferma == "lista" and success_flag:
-        print("⚠️ Slot non disponibile, prenotazione effettuata per la lista d'attesa!, prova a prenotare alle 19:15")
+        print("?? Slot non disponibile, prenotazione effettuata per la lista d'attesa!, prova a prenotare alle 19:15")
         success_flag2, tipo_conferma2 = prenota("19:15")
-        asyncio.run(invia_messaggio("19:15", success_flag2, tipo_conferma2))
+        await invia_messaggio("19:15", success_flag2, tipo_conferma2)
+
+if __name__ == "__main__":
+    asyncio.run(main())
     
