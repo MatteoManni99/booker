@@ -145,12 +145,9 @@ def prenota(orario):
             chrome_options.add_argument("--disable-sync")
             chrome_options.add_argument("--disable-plugins")
             chrome_options.add_argument("--disable-images")  # Non carica le immagini (risparmia banda)
+            chrome_options.add_argument("--disable-mobile-emulation")
             
             logger.info("Opzioni headless configurate")
-            # Opzioni aggiuntive per RPi
-            chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--disable-extensions")
-            chrome_options.add_argument("--disable-mobile-emulation")
             
             # Cerca il chromedriver di chromium
             chromedriver_paths = [
