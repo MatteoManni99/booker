@@ -294,8 +294,8 @@ def prenota(orario):
                 else:
                     raise Exception("Bottone 'Lista' non visibile")
             except NoSuchElementException:
-                logger.error("Né 'Conferma Prenotazione' né 'Lista' sono disponibili")
-                raise Exception("Né 'Conferma Prenotazione' né 'Lista' sono disponibili")
+                logger.error("Ne 'Conferma Prenotazione' e 'Lista' sono disponibili")
+                raise Exception("Ne 'Conferma Prenotazione' ne 'Lista' sono disponibili")
 
         time.sleep(1)
         logger.info("Prenotazione confermata")
@@ -317,8 +317,8 @@ def prenota(orario):
                 else:
                     raise Exception("Bottone 'Ok' non visibile")
             except NoSuchElementException:
-                logger.error("Né 'No' né 'Ok' sono disponibili")
-                raise Exception("Né 'No' né 'Ok' sono disponibili")
+                logger.error("Ne 'No' ne 'Ok' sono disponibili")
+                raise Exception("Ne 'No' ne 'Ok' sono disponibili")
         
         time.sleep(0.5)
         logger.info("✓ Prenotazione completata con successo!")
