@@ -12,23 +12,94 @@ from telegram import Bot
 import asyncio
 from datetime import datetime, timedelta
 import platform
+import logging
+from logging.handlers import RotatingFileHandler
+
+# ==================== CONFIGURAZIONE LOGGING ====================
+def setup_logging():
+    """Configura il sistema di logging con file e console"""
+    
+    # Crea cartella per i log
+    LOG_DIR = "logs"
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
+        print(f"✓ Cartella '{LOG_DIR}' creata")
+    
+    # Crea cartella per gli screenshot
+    SCREENSHOT_DIR = "screenshots_debug"
+    if not os.path.exists(SCREENSHOT_DIR):
+        os.makedirs(SCREENSHOT_DIR)
+        print(f"✓ Cartella '{SCREENSHOT_DIR}' creata")
+    
+    # Ottieni il logger
+    logger = logging.getLogger("PRENOTA")
+    logger.setLevel(logging.DEBUG)
+    
+    # Formato per i log
+    formatter = logging.Formatter(
+        '[%(asctime)s] %(levelname)-8s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # Handler per file con rotazione (max 5MB, max 5 file)
+    log_file = os.path.join(LOG_DIR, "prenota.log")
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=5*1024*1024,  # 5MB
+        backupCount=5  # Mantiene i 5 file precedenti
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    
+    # Handler per errori in file separato
+    error_log_file = os.path.join(LOG_DIR, "prenota_errors.log")
+    error_handler = RotatingFileHandler(
+        error_log_file,
+        maxBytes=5*1024*1024,
+        backupCount=5
+    )
+    error_handler.setLevel(logging.ERROR)
+    error_handler.setFormatter(formatter)
+    logger.addHandler(error_handler)
+    
+    # Handler per console
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    return logger, SCREENSHOT_DIR
 
 # Usa il token che ti ha dato BotFather
 token = ANACLETO_KEY
 chat_id = MY_TELEGRAM_ID
 bot = Bot(token=token)
 
-#Crea cartella per gli screenshot
-SCREENSHOT_DIR = "screenshots_debug"
-if not os.path.exists(SCREENSHOT_DIR):
-    os.makedirs(SCREENSHOT_DIR)
-    print(f"✓ Cartella '{SCREENSHOT_DIR}' creata")
+# Setup logging
+logger, SCREENSHOT_DIR = setup_logging()
+
+logger.info("=" * 60)
+logger.info("AVVIO SCRIPT DI PRENOTAZIONE")
+logger.info("=" * 60)
 
 def prenota(orario):
+    """
+    Effettua la prenotazione per l'orario specificato
+    
+    Args:
+        orario: Stringa dell'orario (es: "18:15")
+    
+    Returns:
+        tuple: (success_flag, tipo_conferma)
+    """
     success_flag = False
     tipo_conferma = "ok"
+    driver = None
+    
     try:
-        print("?? Configurazione browser...")
+        logger.info(f"Inizio prenotazione per orario: {orario}")
+        logger.debug("Configurazione browser...")
         
         # Opzioni Chrome/Chromium
         chrome_options = Options()
@@ -47,7 +118,7 @@ def prenota(orario):
 
         # Su Raspberry Pi, usa Chromium
         if "arm" in platform.machine() or "aarch64" in platform.machine():
-            print("?? Rilevato Raspberry Pi - Usando Chromium")
+            logger.info("Rilevato Raspberry Pi - Usando Chromium")
             chrome_options.binary_location = "/usr/bin/chromium-browser"
             # Opzioni aggiuntive per RPi
             chrome_options.add_argument("--disable-gpu")
@@ -65,31 +136,32 @@ def prenota(orario):
             for path in chromedriver_paths:
                 if os.path.exists(path):
                     chromedriver_path = path
-                    print(f"  ? Trovato chromedriver: {path}")
+                    logger.info(f"Trovato chromedriver: {path}")
                     break
             
             if not chromedriver_path:
-                print("  ? Chromedriver non trovato!")
-                print("  Installa con: sudo apt-get install chromium-chromedriver")
+                logger.error("Chromedriver non trovato!")
+                logger.error("Installa con: sudo apt-get install chromium-chromedriver")
                 raise Exception("Chromedriver non trovato su Raspberry Pi")
             
             service = Service(chromedriver_path)
             driver = webdriver.Chrome(service=service, options=chrome_options)
 
         else:
-            print("?? Ricerca e download chromedriver...")
+            logger.debug("Ricerca e download chromedriver...")
             from webdriver_manager.chrome import ChromeDriverManager
             service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=chrome_options)
         
-        print("✓ Broewser pronto")
+        logger.info("Browser pronto")
         
-        print("1. Apertura sito...")
+        logger.debug("Step 1: Apertura sito...")
         driver.get("https://ecomm.sportrick.com/REPLYwellnessTO")
         time.sleep(1)
+        logger.debug(f"URL attuale: {driver.current_url}")
         
         # Chiudi eventuali popup di cookie o notifiche
-        print("2. Chiusura popup e cookie...")
+        logger.debug("Step 2: Chiusura popup e cookie...")
         try:
             # Prova diversi selettori comuni per chiudere i popup
             close_selectors = [
@@ -104,186 +176,242 @@ def prenota(orario):
                 "//button[@aria-label='Close']"
             ]
             
+            popup_found = False
             for selector in close_selectors:
                 try:
                     buttons = driver.find_elements(By.XPATH, selector)
                     for button in buttons:
                         if button.is_displayed():
+                            button_text = button.text[:30]
                             button.click()
-                            print(f"  ✓ Chiuso popup: {button.text[:30]}")
+                            logger.debug(f"Chiuso popup: {button_text}")
+                            popup_found = True
                             time.sleep(0.5)
                 except:
                     pass
+            
+            if not popup_found:
+                logger.debug("Nessun popup trovato")
         except Exception as e:
-            print(f"  ℹ Nessun popup trovato: {e}")
+            logger.warning(f"Errore durante chiusura popup: {e}")
         
-        print("✓ Sito aperto")
+        logger.info("Sito aperto")
         
-        print("3. Ricerca campo username...")
+        logger.debug("Step 3: Ricerca campo username...")
         username_field = driver.find_element(By.NAME, "UserName")
-        print(f"✓ Username field trovato")
+        logger.debug("Username field trovato")
         
-        print("4. Ricerca campo password...")
+        logger.debug("Step 4: Ricerca campo password...")
         password_field = driver.find_element(By.NAME, "Password")
-        print(f"✓ Password field trovato")
+        logger.debug("Password field trovato")
         
-        print("5. Inserimento credenziali...")
+        logger.debug("Step 5: Inserimento credenziali...")
         username_field.send_keys(USERNAME)
         password_field.send_keys(PASSWORD)
-        print("✓ Credenziali inserite")
+        logger.debug("Credenziali inserite")
         
-        print("6. Ricerca bottone login...")
+        logger.debug("Step 6: Ricerca bottone login...")
         login_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
-        print(f"✓ Login button trovato")
+        logger.debug("Login button trovato")
         
-        print("7. Click su login...")
+        logger.debug("Step 7: Click su login...")
         login_button.click()
         time.sleep(1)
-        print("✓ Login completato")
+        logger.info("Login completato")
         
-        print("8. Click su Booking...")
+        logger.debug("Step 8: Click su Booking...")
         booking_element = driver.find_element(By.ID, "mainmenu-booking")
         booking_element.click()
         time.sleep(0.5)
-        print("✓ Booking cliccato")
+        logger.debug("Booking cliccato")
         
-        print("9. Click su Nuova Prenotazione...")
+        logger.debug("Step 9: Click su Nuova Prenotazione...")
         nuova_prenotazione = driver.find_element(By.XPATH, "//span[@class='title' and contains(text(), 'Nuova Prenotazione')]")
-        # Clicca sul genitore (li o a) perché il click deve essere su un elemento clickable
         parent = nuova_prenotazione.find_element(By.XPATH, "..")
         parent.click()
         time.sleep(0.5)
-        print("✓ Nuova Prenotazione cliccato")
+        logger.debug("Nuova Prenotazione cliccato")
         
-        print("10. Click su Sala Attrezzi...")
+        logger.debug("Step 10: Click su Sala Attrezzi...")
         sala_attrezzi = driver.find_element(By.XPATH, "//h3[@class='list-group-item-heading col-md-10 font-blue-madison' and contains(text(), 'SALA ATTREZZI')]")
-        # Clicca sul genitore che contiene l'elemento clickable
         parent = sala_attrezzi.find_element(By.XPATH, "..")
         parent.click()
         time.sleep(0.5)
-        print("✓ Sala Attrezzi cliccato")
+        logger.debug("Sala Attrezzi cliccato")
         
-        print("11. Click su '>' cinque volte...")
+        logger.debug("Step 11: Navigazione verso l'orario desiderato...")
         for i in range(5):
-            # Il > è un'icona fa-chevron-right, cerchiamo il pulsante/elemento che la contiene
             next_button = driver.find_element(By.XPATH, "//i[@class='fa fa-chevron-right']/..")
             next_button.click()
             time.sleep(0.1)
-            print(f"  ✓ Click {i+1}/5 su '>'")
-        print("✓ Completati i 5 click su '>'")
-        time.sleep(7)  # Attendi il caricamento degli orari disponibili
+            logger.debug(f"Click {i+1}/5 su '>'")
+        logger.debug("Completati i 5 click su '>'")
         
-        print(f"12. Click su '{orario} - 60 min SALA ATTREZZI'...")
-        # Cerchiamo tutti gli slot disponibili
+        logger.debug("Attesa caricamento orari disponibili (7 secondi)...")
+        time.sleep(7)
+        
+        logger.debug(f"Step 12: Ricerca orario '{orario}'...")
         slots = driver.find_elements(By.XPATH, "//div[@class='event-slot slot-available']")
-        print(f"  ℹ Trovati {len(slots)} slot disponibili")
-        # Proviamo a trovare lo slot con l'orario specifico
+        logger.info(f"Trovati {len(slots)} slot disponibili")
+        
+        slot_trovato = False
         for slot in reversed(slots):
             try:
                 time_start = slot.find_element(By.XPATH, ".//span[@class='time-start']").text
                 
                 if orario in time_start:
-                    print(f"  ✓ Trovato slot: {time_start}")
+                    logger.info(f"Trovato slot: {time_start}")
                     driver.execute_script("arguments[0].scrollIntoView(true);", slot)
                     time.sleep(0.5)
                     slot.click()
+                    slot_trovato = True
                     break
             except:
                 pass
         
-        time.sleep(2)
-        print("✓ Orario selezionato")
+        if not slot_trovato:
+            logger.warning(f"Orario {orario} non trovato tra gli slot disponibili")
         
-        print("13. Click su Conferma Prenotazione...")
+        time.sleep(2)
+        logger.info("Orario selezionato")
+        
+        logger.debug("Step 13: Click su Conferma Prenotazione...")
         try:
             conferma_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Conferma Prenotazione')]")
             if conferma_button.is_displayed():
                 conferma_button.click()
+                logger.debug("Bottone 'Conferma Prenotazione' cliccato")
             else:
                 raise Exception("Bottone 'Conferma Prenotazione' non visibile")
         except NoSuchElementException:
-            print("'Conferma Prenotazione' non trovato, provo con 'Lista'...")
+            logger.warning("'Conferma Prenotazione' non trovato, provo con 'Lista'...")
             tipo_conferma = "lista"
             try:
                 lista_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Lista')]")
                 if lista_button.is_displayed():
                     lista_button.click()
+                    logger.debug("Bottone 'Lista' cliccato")
                 else:
                     raise Exception("Bottone 'Lista' non visibile")
             except NoSuchElementException:
+                logger.error("Né 'Conferma Prenotazione' né 'Lista' sono disponibili")
                 raise Exception("Né 'Conferma Prenotazione' né 'Lista' sono disponibili")
 
         time.sleep(1)
-        print("✓ Prenotazione confermata")
+        logger.info("Prenotazione confermata")
         
-        print("14. Click su No...")
+        logger.debug("Step 14: Click su No...")
         try:
             no_button = driver.find_element(By.XPATH, "//button[contains(text(), 'No')]")
             if no_button.is_displayed():
                 no_button.click()
+                logger.debug("Bottone 'No' cliccato")
         except NoSuchElementException:
-            print("'No' non trovato, provo con 'Ok'...")
+            logger.warning("'No' non trovato, provo con 'Ok'...")
             tipo_conferma = "lista"
             try:
                 ok_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Ok')]")
                 if ok_button.is_displayed():
                     ok_button.click()
+                    logger.debug("Bottone 'Ok' cliccato")
                 else:
                     raise Exception("Bottone 'Ok' non visibile")
             except NoSuchElementException:
+                logger.error("Né 'No' né 'Ok' sono disponibili")
                 raise Exception("Né 'No' né 'Ok' sono disponibili")
+        
         time.sleep(0.5)
-        print("✓ Prenotazione completata!")
+        logger.info("✓ Prenotazione completata con successo!")
         success_flag = True
         
     except Exception as e:
-        print(f"✗ ERRORE: {type(e).__name__}: {e}")
+        logger.error(f"ERRORE: {type(e).__name__}: {e}", exc_info=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        try:
-            driver.save_screenshot(os.path.join(SCREENSHOT_DIR, f"ERRORE_{timestamp}.png"))
-            print(f"Screenshot salvato in '{SCREENSHOT_DIR}/ERRORE_{timestamp}.png'")
-            return success_flag, tipo_conferma
-        except:
-            return success_flag, tipo_conferma
+        
+        if driver:
+            try:
+                screenshot_path = os.path.join(SCREENSHOT_DIR, f"ERRORE_{timestamp}.png")
+                driver.save_screenshot(screenshot_path)
+                logger.error(f"Screenshot salvato: {screenshot_path}")
+            except Exception as screenshot_error:
+                logger.error(f"Impossibile salvare screenshot: {screenshot_error}")
+        
+        success_flag = False
+        
     finally:
-        try:
-            driver.quit()
-            return success_flag, tipo_conferma
-        except:
-            return success_flag, tipo_conferma
+        if driver:
+            try:
+                driver.quit()
+                logger.debug("Driver chiuso")
+            except Exception as e:
+                logger.error(f"Errore durante chiusura driver: {e}")
+        
+        logger.info(f"Fine prenotazione - Successo: {success_flag}, Tipo: {tipo_conferma}")
+        return success_flag, tipo_conferma
 
-async def invia_messaggio(orario, success_flag = False, tipo_conferma = "ok"):
+async def invia_messaggio(orario, success_flag=False, tipo_conferma="ok"):
+    """
+    Invia messaggio Telegram con il risultato della prenotazione
+    
+    Args:
+        orario: Orario della prenotazione
+        success_flag: Se la prenotazione è andata a buon fine
+        tipo_conferma: Tipo di conferma ('ok' o 'lista')
+    """
+    logger.info(f"Invio messaggio Telegram per orario {orario}...")
+    
     data_futura = datetime.now() + timedelta(days=7)
     giorno = str(data_futura.day)
     giorni_settimana = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
     giorno_settimana = giorni_settimana[data_futura.weekday()]
 
-    if not success_flag:
-        await bot.send_message(
-            chat_id=chat_id, 
-            text=f"❌ Prenotazione per {giorno_settimana} {giorno} alle {orario} fallita. Controlla i log per dettagli."
-        )
-    else:
-        if tipo_conferma == "lista":
-            await bot.send_message(
-                chat_id=chat_id, 
-                text=f"⚠️ Slot per {giorno_settimana} {giorno} alle {orario} ora non disponibile! Prenotazione effettuata con successo per la lista d'attesa!"
-            )
-        elif tipo_conferma == "ok":
-            await bot.send_message(
-                chat_id=chat_id, 
-                text=f"✅ Prenotazione completata per {giorno_settimana} {giorno} alle {orario} con successo!"
-            )
-        
+    try:
+        if not success_flag:
+            messaggio = f"❌ Prenotazione per {giorno_settimana} {giorno} alle {orario} fallita. Controlla i log per dettagli."
+            await bot.send_message(chat_id=chat_id, text=messaggio)
+            logger.warning(f"Messaggio fallimento inviato: {messaggio}")
+        else:
+            if tipo_conferma == "lista":
+                messaggio = f"⚠️ Slot per {giorno_settimana} {giorno} alle {orario} ora non disponibile! Prenotazione effettuata con successo per la lista d'attesa!"
+                await bot.send_message(chat_id=chat_id, text=messaggio)
+                logger.warning(f"Messaggio lista d'attesa inviato: {messaggio}")
+            elif tipo_conferma == "ok":
+                messaggio = f"✅ Prenotazione completata per {giorno_settimana} {giorno} alle {orario} con successo!"
+                await bot.send_message(chat_id=chat_id, text=messaggio)
+                logger.info(f"Messaggio successo inviato: {messaggio}")
+    except Exception as e:
+        logger.error(f"Errore nell'invio messaggio Telegram: {e}", exc_info=True)
 
 async def main():
-    success_flag, tipo_conferma = prenota("18:15")
-    await invia_messaggio("18:15", success_flag, tipo_conferma)
-    if tipo_conferma == "lista" and success_flag:
-        print("?? Slot non disponibile, prenotazione effettuata per la lista d'attesa!, prova a prenotare alle 19:15")
-        success_flag2, tipo_conferma2 = prenota("19:15")
-        await invia_messaggio("19:15", success_flag2, tipo_conferma2)
+    """Funzione principale"""
+    logger.info("INIZIO PROCEDURA PRENOTAZIONE")
+    
+    try:
+        # Primo tentativo: 18:15
+        logger.info("Tentativo 1: Prenotazione per le 18:15")
+        success_flag, tipo_conferma = prenota("18:15")
+        await invia_messaggio("18:15", success_flag, tipo_conferma)
+        
+        # Se non disponibile, prova 19:15
+        if tipo_conferma == "lista" and success_flag:
+            logger.warning("Slot 18:15 non disponibile, prenotazione in lista d'attesa. Tentativo per le 19:15...")
+            success_flag2, tipo_conferma2 = prenota("19:15")
+            await invia_messaggio("19:15", success_flag2, tipo_conferma2)
+        
+        logger.info("=" * 60)
+        logger.info("PROCEDURA COMPLETATA")
+        logger.info("=" * 60)
+        
+    except Exception as e:
+        logger.error(f"Errore critico nella procedura principale: {e}", exc_info=True)
+        await invia_messaggio("SCONOSCIUTO", False, "errore")
 
 if __name__ == "__main__":
-    asyncio.run(main())
-    
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.warning("Script interrotto dall'utente")
+    except Exception as e:
+        logger.error(f"Errore nell'esecuzione dello script: {e}", exc_info=True)
+    finally:
+        logger.info("Script terminato")
