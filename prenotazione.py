@@ -120,6 +120,33 @@ def prenota(orario):
         if "arm" in platform.machine() or "aarch64" in platform.machine():
             logger.info("Rilevato Raspberry Pi - Usando Chromium")
             chrome_options.binary_location = "/usr/bin/chromium-browser"
+
+            # ===== OPZIONI ESSENZIALI PER RASPBERRY PI SENZA SCHERMO =====
+            logger.info("Configurazione Chromium in modalità HEADLESS (senza schermo)...")
+            
+            # Modalità headless - essenziale per RPi senza display
+            chrome_options.add_argument("--headless=new")
+            
+            # Disabilita GPU (RPi non ha GPU dedicated)
+            chrome_options.add_argument("--disable-gpu")
+            
+            # Riduce consumo memoria
+            chrome_options.add_argument("--single-process")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-extensions")
+            
+            # Sandbox disabilitato (spesso causa problemi su RPi)
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-setuid-sandbox")
+            
+            # Altre opzioni di stabilità
+            chrome_options.add_argument("--disable-browser-side-navigation")
+            chrome_options.add_argument("--disable-client-side-phishing-detection")
+            chrome_options.add_argument("--disable-sync")
+            chrome_options.add_argument("--disable-plugins")
+            chrome_options.add_argument("--disable-images")  # Non carica le immagini (risparmia banda)
+            
+            logger.info("Opzioni headless configurate")
             # Opzioni aggiuntive per RPi
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument("--disable-extensions")
