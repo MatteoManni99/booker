@@ -82,6 +82,9 @@ bot = Bot(token=token)
 # Setup logging
 logger, SCREENSHOT_DIR = setup_logging()
 
+# ==================== FILE FLAG PER TRACCIARE PRENOTAZIONE ====================
+FLAG_FILE = ".prenotazione_completata.flag"
+
 logger.info("=" * 60)
 logger.info("AVVIO SCRIPT DI PRENOTAZIONE")
 logger.info("=" * 60)
@@ -430,12 +433,48 @@ async def invia_messaggio(orario, success_flag=False, tipo_conferma="ok", step="
                 messaggio = f"✅ Prenotazione completata per {giorno_settimana} {giorno} alle {orario} con successo! Step: {step}"
                 await bot.send_message(chat_id=chat_id, text=messaggio)
                 logger.info(f"Messaggio successo inviato: {messaggio}", extra={"step": step})
+                salva_flag_completamento()
     except Exception as e:
         logger.error(f"Errore nell'invio messaggio Telegram: {e}", exc_info=True)
+
+def salva_flag_completamento():
+    """Salva un file flag per indicare che la prenotazione è completata"""
+    try:
+        with open(FLAG_FILE, 'w') as f:
+            f.write(f"Prenotazione completata con successo il: {datetime.now()}\n")
+        logger.info(f"Flag di completamento salvato: {FLAG_FILE}")
+    except Exception as e:
+        logger.error(f"Errore nel salvare il flag: {e}")
+
+def verifica_prenotazione_completata():
+    """Verifica se la prenotazione è già stata completata"""
+    if os.path.exists(FLAG_FILE):
+        logger.info(f"⏭️  Prenotazione già completata in passato. Flag trovato: {FLAG_FILE}")
+        logger.info("Script terminato senza eseguire prenotazione.")
+        return True
+    return False
+
+def reset_flag():
+    """
+    Reset del flag - Cancella il file per permettere nuove prenotazioni.
+    Puoi chiamare questa funzione manualmente o da un'altra interfaccia.
+    """
+    if os.path.exists(FLAG_FILE):
+        try:
+            os.remove(FLAG_FILE)
+            logger.info(f"✓ Flag resettato: {FLAG_FILE} eliminato")
+        except Exception as e:
+            logger.error(f"Errore nel resettare il flag: {e}")
+    else:
+        logger.info("Nessun flag trovato da resettare")
 
 async def main():
     """Funzione principale"""
     logger.info("INIZIO PROCEDURA PRENOTAZIONE")
+    
+    # ===== CHECK FONDAMENTALE: Verifica se prenotazione è già completata =====
+    if verifica_prenotazione_completata():
+        return  # Esce subito senza fare nulla
     
     try:
         # Primo tentativo: 18:15
@@ -443,11 +482,26 @@ async def main():
         success_flag, tipo_conferma, step = prenota("18:15")
         await invia_messaggio("18:15", success_flag, tipo_conferma, step)
         
+        # Se prenotazione riuscita, salva il flag
+        if success_flag and tipo_conferma == "ok":
+            logger.info("=" * 60)
+            logger.info("PROCEDURA COMPLETATA CON SUCCESSO")
+            logger.info("Le prossime esecuzioni dello script non faranno nulla.")
+            logger.info("=" * 60)
+            return  # Esce dopo successo
+        
         # Se non disponibile, prova 19:15
         if tipo_conferma == "lista" and success_flag:
             logger.warning("Slot 18:15 non disponibile, prenotazione in lista d'attesa. Tentativo per le 19:15...")
             success_flag2, tipo_conferma2, step = prenota("19:15")
             await invia_messaggio("19:15", success_flag2, tipo_conferma2, step)
+            
+            # Se secondo tentativo riuscito, salva il flag
+            if success_flag2 and tipo_conferma2 == "ok":
+                logger.info("=" * 60)
+                logger.info("PROCEDURA COMPLETATA CON SUCCESSO")
+                logger.info("Le prossime esecuzioni dello script non faranno nulla.")
+                logger.info("=" * 60)
         
         logger.info("=" * 60)
         logger.info("PROCEDURA COMPLETATA")
