@@ -1,9 +1,12 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import NoSuchElementException
+
 import time
 import os
 from datetime import datetime
@@ -91,11 +94,12 @@ def prenota(orario):
         orario: Stringa dell'orario (es: "18:15")
     
     Returns:
-        tuple: (success_flag, tipo_conferma)
+        tuple: (success_flag, tipo_conferma, step)
     """
     success_flag = False
     tipo_conferma = "ok"
     driver = None
+    step = "preparazione"
     
     try:
         logger.info(f"Inizio prenotazione per orario: {orario}")
@@ -178,12 +182,14 @@ def prenota(orario):
             driver = webdriver.Chrome(service=service, options=chrome_options)
         
         logger.info("Browser pronto")
+        step = "browser_pronto"
         
         logger.debug("Step 1: Apertura sito...")
         driver.get("https://ecomm.sportrick.com/REPLYwellnessTO")
         time.sleep(1)
         logger.debug(f"URL attuale: {driver.current_url}")
         
+        step = "sito_aperto"
         # Chiudi eventuali popup di cookie o notifiche
         logger.debug("Step 2: Chiusura popup e cookie...")
         try:
@@ -220,7 +226,8 @@ def prenota(orario):
             logger.warning(f"Errore durante chiusura popup: {e}")
         
         logger.info("Sito aperto")
-        
+        step = "popup_chiuso"
+
         logger.debug("Step 3: Ricerca campo username...")
         username_field = driver.find_element(By.NAME, "UserName")
         logger.debug("Username field trovato")
@@ -242,6 +249,8 @@ def prenota(orario):
         login_button.click()
         time.sleep(1)
         logger.info("Login completato")
+
+        step = "login_completato"
         
         logger.debug("Step 8: Click su Booking...")
         booking_element = driver.find_element(By.ID, "mainmenu-booking")
@@ -262,6 +271,7 @@ def prenota(orario):
         parent.click()
         time.sleep(0.5)
         logger.debug("Sala Attrezzi cliccato")
+        step = "sala_attrezzi_selezionata"
         
         logger.debug("Step 11: Navigazione verso l'orario desiderato...")
         for i in range(5):
@@ -271,8 +281,19 @@ def prenota(orario):
             logger.debug(f"Click {i+1}/5 su '>'")
         logger.debug("Completati i 5 click su '>'")
         
-        logger.debug("Attesa caricamento orari disponibili (7 secondi)...")
-        time.sleep(7)
+        logger.debug("Attesa caricamento orari disponibili (max 15 secondi)...")
+
+        step = "pagine_giorni_navigate"
+
+        try:
+            wait = WebDriverWait(driver, 15)  # Massimo 15 secondi
+            wait.until(EC.presence_of_all_elements_located(
+                (By.XPATH, "//div[@class='event-slot slot-available']")
+            ))
+            logger.debug("Orari disponibili caricati ✓")
+            step = "orari_disponibili_caricati"
+        except Exception as e:
+            logger.warning(f"Timeout nell'attesa dei slot disponibili: {e}")
         
         logger.debug(f"Step 12: Ricerca orario '{orario}'...")
         slots = driver.find_elements(By.XPATH, "//div[@class='event-slot slot-available']")
@@ -289,12 +310,15 @@ def prenota(orario):
                     time.sleep(0.5)
                     slot.click()
                     slot_trovato = True
+                    step = "orario_trovato_e_selezionato"
                     break
             except:
                 pass
         
         if not slot_trovato:
             logger.warning(f"Orario {orario} non trovato tra gli slot disponibili")
+            step = "orario_non_trovato"
+            raise Exception(f"Orario {orario} non trovato")
         
         time.sleep(2)
         logger.info("Orario selezionato")
@@ -321,9 +345,10 @@ def prenota(orario):
                 logger.error("Ne 'Conferma Prenotazione' e 'Lista' sono disponibili")
                 raise Exception("Ne 'Conferma Prenotazione' ne 'Lista' sono disponibili")
 
-        time.sleep(1)
         logger.info("Prenotazione confermata")
-        
+        step = "prenotazione_confermata"
+
+        time.sleep(1)
         logger.debug("Step 14: Click su No...")
         try:
             no_button = driver.find_element(By.XPATH, "//button[contains(text(), 'No')]")
@@ -347,6 +372,7 @@ def prenota(orario):
         time.sleep(0.5)
         logger.info("✓ Prenotazione completata con successo!")
         success_flag = True
+        step = "procedura_completata"
         
     except Exception as e:
         logger.error(f"ERRORE: {type(e).__name__}: {e}", exc_info=True)
@@ -370,10 +396,10 @@ def prenota(orario):
             except Exception as e:
                 logger.error(f"Errore durante chiusura driver: {e}")
         
-        logger.info(f"Fine prenotazione - Successo: {success_flag}, Tipo: {tipo_conferma}")
-        return success_flag, tipo_conferma
+        logger.info(f"Fine prenotazione - Successo: {success_flag}, Tipo: {tipo_conferma}", extra={"step": step})
+        return success_flag, tipo_conferma, step
 
-async def invia_messaggio(orario, success_flag=False, tipo_conferma="ok"):
+async def invia_messaggio(orario, success_flag=False, tipo_conferma="ok", step="sconosciuto"):
     """
     Invia messaggio Telegram con il risultato della prenotazione
     
@@ -381,8 +407,9 @@ async def invia_messaggio(orario, success_flag=False, tipo_conferma="ok"):
         orario: Orario della prenotazione
         success_flag: Se la prenotazione è andata a buon fine
         tipo_conferma: Tipo di conferma ('ok' o 'lista')
+        step: Step corrente della procedura
     """
-    logger.info(f"Invio messaggio Telegram per orario {orario}...")
+    logger.info(f"Invio messaggio Telegram per orario {orario}...", extra={"step": step})
     
     data_futura = datetime.now() + timedelta(days=7)
     giorno = str(data_futura.day)
@@ -391,18 +418,18 @@ async def invia_messaggio(orario, success_flag=False, tipo_conferma="ok"):
 
     try:
         if not success_flag:
-            messaggio = f"❌ Prenotazione per {giorno_settimana} {giorno} alle {orario} fallita. Controlla i log per dettagli."
+            messaggio = f"❌ Prenotazione per {giorno_settimana} {giorno} alle {orario} fallita. Controlla i log per dettagli. Step: {step}"
             await bot.send_message(chat_id=chat_id, text=messaggio)
-            logger.warning(f"Messaggio fallimento inviato: {messaggio}")
+            logger.warning(f"Messaggio fallimento inviato: {messaggio}", extra={"step": step})
         else:
             if tipo_conferma == "lista":
-                messaggio = f"⚠️ Slot per {giorno_settimana} {giorno} alle {orario} ora non disponibile! Prenotazione effettuata con successo per la lista d'attesa!"
+                messaggio = f"⚠️ Slot per {giorno_settimana} {giorno} alle {orario} ora non disponibile! Prenotazione effettuata con successo per la lista d'attesa! Step: {step}"
                 await bot.send_message(chat_id=chat_id, text=messaggio)
-                logger.warning(f"Messaggio lista d'attesa inviato: {messaggio}")
+                logger.warning(f"Messaggio lista d'attesa inviato: {messaggio}", extra={"step": step})
             elif tipo_conferma == "ok":
-                messaggio = f"✅ Prenotazione completata per {giorno_settimana} {giorno} alle {orario} con successo!"
+                messaggio = f"✅ Prenotazione completata per {giorno_settimana} {giorno} alle {orario} con successo! Step: {step}"
                 await bot.send_message(chat_id=chat_id, text=messaggio)
-                logger.info(f"Messaggio successo inviato: {messaggio}")
+                logger.info(f"Messaggio successo inviato: {messaggio}", extra={"step": step})
     except Exception as e:
         logger.error(f"Errore nell'invio messaggio Telegram: {e}", exc_info=True)
 
@@ -413,14 +440,14 @@ async def main():
     try:
         # Primo tentativo: 18:15
         logger.info("Tentativo 1: Prenotazione per le 18:15")
-        success_flag, tipo_conferma = prenota("18:15")
-        await invia_messaggio("18:15", success_flag, tipo_conferma)
+        success_flag, tipo_conferma, step = prenota("18:15")
+        await invia_messaggio("18:15", success_flag, tipo_conferma, step)
         
         # Se non disponibile, prova 19:15
         if tipo_conferma == "lista" and success_flag:
             logger.warning("Slot 18:15 non disponibile, prenotazione in lista d'attesa. Tentativo per le 19:15...")
-            success_flag2, tipo_conferma2 = prenota("19:15")
-            await invia_messaggio("19:15", success_flag2, tipo_conferma2)
+            success_flag2, tipo_conferma2, step = prenota("19:15")
+            await invia_messaggio("19:15", success_flag2, tipo_conferma2, step)
         
         logger.info("=" * 60)
         logger.info("PROCEDURA COMPLETATA")
@@ -428,7 +455,7 @@ async def main():
         
     except Exception as e:
         logger.error(f"Errore critico nella procedura principale: {e}", exc_info=True)
-        await invia_messaggio("SCONOSCIUTO", False, "errore")
+        await invia_messaggio("SCONOSCIUTO", False, "errore", "errore_critico")
 
 if __name__ == "__main__":
     try:
