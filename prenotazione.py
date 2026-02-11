@@ -277,12 +277,12 @@ def prenota(orario):
         step = "sala_attrezzi_selezionata"
         
         logger.debug("Step 11: Navigazione verso l'orario desiderato...")
-        for i in range(5):
+        for i in range(7):
             next_button = driver.find_element(By.XPATH, "//i[@class='fa fa-chevron-right']/..")
             next_button.click()
             time.sleep(0.1)
-            logger.debug(f"Click {i+1}/5 su '>'")
-        logger.debug("Completati i 5 click su '>'")
+            logger.debug(f"Click {i+1}/7 su '>'")
+        logger.debug("Completati i 7 click su '>'")
         
         logger.debug("Attesa caricamento orari disponibili (max 15 secondi)...")
 
