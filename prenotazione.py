@@ -479,7 +479,8 @@ async def main():
     try:
         # Primo tentativo: 18:15
         logger.info("Tentativo 1: Prenotazione per le 18:15")
-        success_flag, tipo_conferma, step = prenota("18:15")
+        #success_flag, tipo_conferma, step = prenota("18:15")
+        success_flag, tipo_conferma, step = prenota("13:30")
         await invia_messaggio("18:15", success_flag, tipo_conferma, step)
         
         # Se prenotazione riuscita, salva il flag
