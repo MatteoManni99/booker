@@ -288,40 +288,32 @@ def prenota(orario):
 
         step = "pagine_giorni_navigate"
 
+        def slot_with_time_is_available(time_to_find):
+            def _predicate(driver):
+                slots = driver.find_elements(By.XPATH, "//div[@class='event-slot slot-available']")
+                for slot in slots:
+                    try:
+                        time_start = slot.find_element(By.XPATH, ".//span[@class='time-start']").text
+                        if orario in time_start:
+                            return slot
+                    except:
+                        pass
+                return False
+            return _predicate
+
         try:
-            wait = WebDriverWait(driver, 15)  # Massimo 15 secondi
-            wait.until(EC.presence_of_all_elements_located(
-                (By.XPATH, "//div[@class='event-slot slot-available']")
-            ))
-            logger.debug("Orari disponibili caricati ✓")
-            step = "orari_disponibili_caricati"
+            wait = WebDriverWait(driver, 15)
+            slot_element = wait.until(slot_with_time_is_available(orario))
+            logger.debug(f"Trovato slot: {orario} ✓")
+            
+            driver.execute_script("arguments[0].scrollIntoView(true);", slot_element)
+            time.sleep(0.5)
+            slot_element.click()
+            step = "orario_trovato_e_selezionato"
         except Exception as e:
-            logger.warning(f"Timeout nell'attesa dei slot disponibili: {e}")
-        
-        logger.debug(f"Step 12: Ricerca orario '{orario}'...")
-        slots = driver.find_elements(By.XPATH, "//div[@class='event-slot slot-available']")
-        logger.info(f"Trovati {len(slots)} slot disponibili")
-        
-        slot_trovato = False
-        for slot in reversed(slots):
-            try:
-                time_start = slot.find_element(By.XPATH, ".//span[@class='time-start']").text
-                
-                if orario in time_start:
-                    logger.info(f"Trovato slot: {time_start}")
-                    driver.execute_script("arguments[0].scrollIntoView(true);", slot)
-                    time.sleep(0.5)
-                    slot.click()
-                    slot_trovato = True
-                    step = "orario_trovato_e_selezionato"
-                    break
-            except:
-                pass
-        
-        if not slot_trovato:
-            logger.warning(f"Orario {orario} non trovato tra gli slot disponibili")
+            logger.warning(f"Orario {orario} non trovato entro 15 secondi: {e}")
             step = "orario_non_trovato"
-            raise Exception(f"Orario {orario} non trovato")
+            raise
         
         time.sleep(2)
         logger.info("Orario selezionato")
