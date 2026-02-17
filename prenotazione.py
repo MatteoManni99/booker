@@ -190,13 +190,30 @@ def prenota(orario):
         step = "browser_pronto"
         
         logger.info("Step 1: Apertura sito...")
-        for _ in range(3):
-            driver.set_page_load_timeout(2)  # Timeout di 15 secondi
+        max_retries = 5
+        for attempt in range(1, max_retries + 1):
             try:
-                logger.debug("Caricamento pagina con timeout di 2 secondi...")
+                timeout = 5 + (attempt - 1) * 3  # 5s, 8s, 11s (backoff esponenziale)
+                logger.debug(f"Tentativo {attempt}/{max_retries}: Caricamento con timeout di {timeout}s...")
+                
+                driver.set_page_load_timeout(timeout)
                 driver.get("https://ecomm.sportrick.com/REPLYwellnessTO/Account/Login?returnUrl=%2FREPLYwellnessTO")
+                
+                logger.info("✓ Pagina caricata con successo")
+                break  # ← ESCE dal loop se ha successo
+                
             except TimeoutException:
-                logger.warning("Timeout sul caricamento della pagina, continuo comunque...")
+                logger.warning(f"Timeout tentativo {attempt}/{max_retries}")
+                
+                if attempt < max_retries:
+                    wait_time = 2 ** attempt  # 2s, 4s (backoff esponenziale)
+                    logger.debug(f"Attesa {wait_time}s prima del prossimo tentativo...")
+                    time.sleep(wait_time)  # ← ATTENDE prima di ritentare
+                continue  # ← SALTA al prossimo tentativo
+            
+            except Exception as e:
+                logger.error(f"Errore imprevisto: {e}")
+                break
             
         # driver.get("https://ecomm.sportrick.com/REPLYwellnessTO/Account/Login?returnUrl=%2FREPLYwellnessTO")
         time.sleep(1)
