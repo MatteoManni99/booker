@@ -194,20 +194,20 @@ def prenota(orario):
         logger.debug(f"URL attuale: {driver.current_url}")
         
         step = "sito_aperto"
-        # ===== NUOVO STEP: Click sulla barra del browser e invio =====
-        # logger.debug("Step 1.5: Click sulla barra del browser e pressione tasto Enter...")
-        # try:
-        #     # Seleziona la barra dell'indirizzo con Ctrl+L
-        #     driver.find_element(By.TAG_NAME, "body").send_keys(Keys.CONTROL + "l")
-        #     time.sleep(0.3)
+        #===== NUOVO STEP: Click sulla barra del browser e invio =====
+        logger.debug("Step 1.5: Click sulla barra del browser e pressione tasto Enter...")
+        try:
+            # Seleziona la barra dell'indirizzo con Ctrl+L
+            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.CONTROL + "l")
+            time.sleep(0.3)
             
-        #     # Premi Enter per confermare
-        #     driver.find_element(By.TAG_NAME, "body").send_keys(Keys.RETURN)
-        #     time.sleep(1)
-        #     logger.debug("✓ Click sulla barra del browser e tasto Enter completati")
-        # except Exception as e:
-        #     logger.warning(f"Errore durante click sulla barra del browser: {e}")
-        # # Chiudi eventuali popup di cookie o notifiche
+            # Premi Enter per confermare
+            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.RETURN)
+            time.sleep(1)
+            logger.debug("✓ Click sulla barra del browser e tasto Enter completati")
+        except Exception as e:
+            logger.warning(f"Errore durante click sulla barra del browser: {e}")
+        # Chiudi eventuali popup di cookie o notifiche
         logger.debug("Step 2: Chiusura popup e cookie...")
         try:
             # Prova diversi selettori comuni per chiudere i popup
