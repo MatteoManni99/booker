@@ -1,3 +1,4 @@
+from httpcore import TimeoutException
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -189,7 +190,15 @@ def prenota(orario):
         step = "browser_pronto"
         
         logger.info("Step 1: Apertura sito...")
-        driver.get("https://ecomm.sportrick.com/REPLYwellnessTO/Account/Login?returnUrl=%2FREPLYwellnessTO")
+        for _ in range(3):
+            driver.set_page_load_timeout(2)  # Timeout di 15 secondi
+            try:
+                logger.debug("Caricamento pagina con timeout di 2 secondi...")
+                driver.get("https://ecomm.sportrick.com/REPLYwellnessTO/Account/Login?returnUrl=%2FREPLYwellnessTO")
+            except TimeoutException:
+                logger.warning("Timeout sul caricamento della pagina, continuo comunque...")
+            
+        # driver.get("https://ecomm.sportrick.com/REPLYwellnessTO/Account/Login?returnUrl=%2FREPLYwellnessTO")
         time.sleep(1)
         logger.debug(f"URL attuale: {driver.current_url}")
         
